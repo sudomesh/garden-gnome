@@ -19,7 +19,7 @@
   "dependencies": {
     "fs-extra": "^0.26.3",
     "http-proxy": "^1.12.0",
-    "netfilter": "^0.3.1",
+    "netfilter": "max-b/node-netfilter",
     "promise": "^7.1.1",
     "ps-node": "0.0.5",
     "underscore": "^1.8.3",
