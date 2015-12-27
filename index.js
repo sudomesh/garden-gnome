@@ -78,6 +78,7 @@ var cleanup = function(callback) {
       chain: 'PREROUTING',
 
       protocol: 'tcp',
+      source: settings.sourceNet,
 
       'in-interface': settings.inInterface || undefined,
 
@@ -85,7 +86,8 @@ var cleanup = function(callback) {
     }, function (err) {
 
       if (err) {
-        debug(settings.iptablesChain + ' PREROUTING rule already deleted');
+        debug(err);
+        debug(settings.iptablesChain + ' PREROUTING rule already deleted?');
       } else {
         debug(settings.iptablesChain + ' PREROUTING rule deleted');
       }
@@ -99,7 +101,8 @@ var cleanup = function(callback) {
           chain: settings.iptablesChain,
         }, function (err) {
           if (err) {
-            debug(settings.iptablesChain + ' chain already deleted');
+            debug(err);
+            debug(settings.iptablesChain + ' chain already deleted?');
           } else {
             debug(settings.iptablesChain + ' chain deleted');
           }
@@ -153,7 +156,7 @@ var refreshDnsmasq = function(callback) {
               var parsed = url.parse(probeUrl);
 
               debug('Resolving:');
-              debug(parsed);
+              debug(parsed.hostname);
 
               dns.resolve(parsed.hostname, 'A', function(err, addresses) {
                 if (err) {
@@ -162,35 +165,40 @@ var refreshDnsmasq = function(callback) {
                   reject('problem resolving ' + parsed.hostname + ' : no records returned');
                 }
 
-                debug('addresses = ');
-                debug(addresses);
+                var iptablesPromises = [];
                 _.each(addresses, function(address) {
-                  debug('address = ');
-                  debug(address);
-                  configBuffer += 'host-record=' + parsed.hostname + ',' + address + '\n';
+                  iptablesPromises.push(function() {
+                    return new Promise(function (resolve, reject) {
+                      configBuffer += 'host-record=' + parsed.hostname + ',' + address + '\n';
+                      iptables.append({
+                        table: 'nat',
+                        chain: settings.iptablesChain,
+
+                        protocol: 'tcp',
+                        destination: address,
+                        'destination-port': 80,
+
+                        'in-interface': inInterface || undefined,
+
+                        jump: 'REDIRECT',
+                        target_options: {
+                          'to-ports': proxyPort
+                        }
+                      }, function (err) {
+                        if (err) {
+                          reject(err);
+                        } else {
+                          resolve();
+                        }
+                      });
+                    });
+                  }());
                 });
-
-                var redirectIp = addresses[0];
-
-                iptables.append({
-                  table: 'nat',
-                  chain: settings.iptablesChain,
-
-                  protocol: 'tcp',
-                  destination: redirectIp,
-
-                  'in-interface': inInterface || undefined,
-
-                  jump: 'DNAT',
-                  target_options: {
-                    to: listenIp + ':' + proxyPort
-                  }
+                Promise.all(iptablesPromises).then(function() {
+                  debug('iptables rules appended');
+                  resolve();
                 }, function (err) {
-                  if (err) {
-                    reject(err);
-                  } else {
-                    resolve();
-                  }
+                  reject(err);
                 });
               });
             } catch (e) {
@@ -199,9 +207,6 @@ var refreshDnsmasq = function(callback) {
           });
         }());
       });
-
-      debug('promises array: ');
-      debug(addIptablesRulePromises);
 
       Promise.all(addIptablesRulePromises).then(function() {
         debug('dnsmasq config buffer:');
@@ -255,6 +260,8 @@ var run = function() {
           chain: 'PREROUTING',
 
           protocol: 'tcp',
+          source: settings.sourceNet,
+          'destination-port': 80,
 
           'in-interface': settings.inInterface || undefined,
 
@@ -286,29 +293,48 @@ var run = function() {
             var parsedUrl = url.parse(req.url);
             debug('Received request for:');
             debug(parsedUrl);
+            debug(req.url);
+            debug(req.headers);
+            var matched = false;
             _.each(settings.probeRequests, function(probeUrl) {
-              if (probeUrl.indexOf(parsedUrl.pathname)) {
+              var parsedProbe = url.parse(probeUrl);
+              debug('parsedProbe:');
+              debug(parsedProbe);
+              if (parsedUrl.pathname === parsedProbe.pathname) {
                 debug(parsedUrl.pathname + ' matches ' + probeUrl);
-                proxy.web(req, res, {
-                  target: 'http://' + listenIp + ':' + webPort
-                });
-              } else {
-                proxy.web(req, res, {
-                  target: 'http://' + req.headers.host + req.url
-                });
+                matched = true;
               }
             });
-          }).listen(proxyPort);
+            if (matched) {
+              proxy.web(req, res, {
+                target: 'http://' + listenIp + ':' + webPort
+              });
+            } else {
+              debug('Proxying to target:');
+              debug('http://' + req.headers.host + req.url);
+
+              proxy.web(req, res, {
+                target: 'http://' + req.headers.host + req.url
+              });
+            }
+          }).listen(proxyPort, function() {
+            debug('listening on port ' + proxyPort);
+          });
 
           debug('webPort: ' + webPort);
 
           http.createServer(function (req, res) {
+            var parsedUrl = url.parse(req.url);
             debug('Received request for:');
             debug(parsedUrl);
+            debug(req.url);
+            debug(req.headers);
             res.writeHead(200, {'Content-Type': 'text/plain' });
             res.write('request successfully proxied to: ' + req.url + '\n' + JSON.stringify(req.headers, true, 2));
             res.end();
-          }).listen(webPort);
+          }).listen(webPort, '127.0.0.1', function() {
+            debug('listening on 127.0.0.1:' + webPort);
+          });
         });
       });
     });
@@ -322,5 +348,4 @@ if (argv.help || argv.h) {
   process.exit();
 }
 
-debug('testin123');
 run();

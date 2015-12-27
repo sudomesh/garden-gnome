@@ -7,6 +7,8 @@ module.exports = {
   dnsLookupPeriod: '300', // in sec
   webPort: '5081',
 
+  sourceNet: '100.64.0.0/10',
+
   iptablesChain: 'garden-gnome',
 
   dnsServers: [
@@ -20,6 +22,7 @@ module.exports = {
 
   probeRequests: [
     'http://apple.com/library/test/success.html',
+    'http://www.apple.com/library/test/success.html',
     'http://captive.apple.com/library/test/success.html',
     'http://www.ibook.info/library/test/success.html',
     'http://www.itools.info/library/test/success.html',
