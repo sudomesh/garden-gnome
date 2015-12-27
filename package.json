@@ -1,0 +1,39 @@
+{
+  "name": "garden-gnome",
+  "description": "Fake captive portal for only redirecting OS internet access probes",
+  "version": "0.0.0",
+  "author": {
+    "name": "maxb",
+    "email": "maxb.personal@gmail.com",
+    "url": "sudomesh.org"
+  },
+  "main": "./index",
+  "keywords": [
+    "captive portal",
+    "fake captive portal"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sudomesh/garden-gnome.git"
+  },
+  "dependencies": {
+    "fs-extra": "^0.26.3",
+    "http-proxy": "^1.12.0",
+    "netfilter": "^0.3.1",
+    "promise": "^7.1.1",
+    "ps-node": "0.0.5",
+    "underscore": "^1.8.3",
+    "yargs": "^3.31.0"
+  },
+  "license": "GPL-3.0",
+  "bugs": {
+    "url": "https://github.com/sudomesh/garden-gnome/issues"
+  },
+  "homepage": "https://github.com/sudomesh/garden-gnome",
+  "maintainers": [
+    {
+      "name": "maxb",
+      "email": "maxb.personal@gmail.com"
+    }
+  ]
+}

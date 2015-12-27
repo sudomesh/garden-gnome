@@ -1,0 +1,31 @@
+
+module.exports = {
+
+  listenIp: '127.0.0.1',
+  proxyPort: '5080',
+  portalTime: '1440', // in min
+  dnsLookupPeriod: '300', // in sec
+  webPort: '5081',
+
+  iptablesChain: 'garden-gnome',
+
+  dnsServers: [
+    '209.244.0.3',
+    '209.244.0.4',
+    '84.200.69.80',
+    '84.200.70.40',
+  ],
+
+  dnsmasqConfFile: '/etc/dnsmasq.d/garden-gnome.conf',
+
+  probeRequests: [
+    'http://apple.com/library/test/success.html',
+    'http://captive.apple.com/library/test/success.html',
+    'http://www.ibook.info/library/test/success.html',
+    'http://www.itools.info/library/test/success.html',
+    'http://www.airport.us/library/test/success.html',
+    'http://www.thinkdifferent.us/library/test/success.html',
+    'http://www.appleiphonecell.com/library/test/success.html',
+    'http://clients3.google.com/generate_204',
+  ]
+};

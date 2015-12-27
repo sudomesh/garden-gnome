@@ -1,0 +1,5 @@
+*~
+\#*\#
+node_modules/**
+settings.js
+npm-debug.log
