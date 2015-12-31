@@ -6,29 +6,58 @@ module.exports = {
   portalTime: '1440', // in min
   dnsLookupPeriod: '300', // in sec
   webPort: '5081',
+  cachePathnameTime: '300', // in sec
 
   sourceNet: '100.64.0.0/10',
 
-  iptablesChain: 'garden-gnome',
+  iptablesChain: 'GARDEN_GNOME',
 
   dnsServers: [
-    '209.244.0.3',
-    '209.244.0.4',
-    '84.200.69.80',
-    '84.200.70.40',
+    '8.8.8.8', // google dns
+    '8.8.4.4', // google dns
+    '209.244.0.3', // Level3
+    '209.244.0.4', // Level3
+    '84.200.69.80', // Dns.Watch
+    '84.200.70.40', // Dns.Watch
+    '198.101.242.71', // alternate-dns.com
+    '23.253.163.53', // alternate-dns.com
+    '205.204.88.60', // PeerDNS
+    '178.21.23.150', // PeerDNS
+    '91.239.100.100', // censurfridns.dk
+    '89.233.43.71', // censurfridns.dk
+    '8.26.56.26', // Comodo DNS
+    '8.20.247.20', // Comodo DNS
+    '104.236.210.29', // DNSReactor
+    '45.55.155.25', // DNSReactor
+    '216.146.35.35', // dyn.com
+    '216.146.35.36', // dyn.com
+    '80.67.169.12', // fdn.fr
+    '37.235.1.174', // FreeDNS
+    '37.235.1.177', // FreeDNS
   ],
 
   dnsmasqConfFile: '/etc/dnsmasq.d/garden-gnome.conf',
+
+  probeHeaders: {
+    'user-agent': /CaptiveNetworkSupport*/
+  },
 
   probeRequests: [
     'http://apple.com/library/test/success.html',
     'http://www.apple.com/library/test/success.html',
     'http://captive.apple.com/library/test/success.html',
+    'http://captive.apple.com',
+    'http://captive.apple.com/hotspot-detect.html',
     'http://www.ibook.info/library/test/success.html',
     'http://www.itools.info/library/test/success.html',
     'http://www.airport.us/library/test/success.html',
     'http://www.thinkdifferent.us/library/test/success.html',
     'http://www.appleiphonecell.com/library/test/success.html',
+    'http://clients1.google.com/generate_204',
+    'http://clients2.google.com/generate_204',
     'http://clients3.google.com/generate_204',
+    'http://connectivitycheck.android.com/generate_204',
+    'http://googleads.g.doubleclick.net/gen_204',
+    'http://www.msftncsi.com/ncsi.txt'
   ]
 };

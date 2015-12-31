@@ -21,6 +21,9 @@ var portalTime = argv.portalTime || settings.portalTime;
 var dnsLookupPeriod = argv.dnsLookupPeriod || settings.dnsLookupPeriod;
 var inInterface = argv.inInterface || settings.inInterface;
 
+var ipProbeRequests = [];
+var cachedPathNames = [];
+
 var debug = function(str) {
   if (argv.debug) {
     process.stdout.write('[DEBUG] ');
@@ -80,6 +83,7 @@ var cleanup = function(callback) {
       protocol: 'tcp',
       source: settings.sourceNet,
 
+      'destination-port': 80,
       'in-interface': settings.inInterface || undefined,
 
       jump: settings.iptablesChain
@@ -131,7 +135,6 @@ var refreshDnsmasq = function(callback) {
         }, function (err) {
           if (err) {
             reject(err);
-            caller.failure(err);
           } else {
             resolve();
           }
@@ -145,7 +148,7 @@ var refreshDnsmasq = function(callback) {
     flushIptablesRulePromise.then(function() {
 
       var configBuffer = '';
-      var resolvedCount = 0;
+      ipProbeRequests = [];
 
       var addIptablesRulePromises = [];
       _.each(settings.probeRequests, function(probeUrl) {
@@ -170,6 +173,7 @@ var refreshDnsmasq = function(callback) {
                   iptablesPromises.push(function() {
                     return new Promise(function (resolve, reject) {
                       configBuffer += 'host-record=' + parsed.hostname + ',' + address + '\n';
+                      ipProbeRequests.push('http://' + address + parsed.pathname);
                       iptables.append({
                         table: 'nat',
                         chain: settings.iptablesChain,
@@ -294,17 +298,57 @@ var run = function() {
             debug('Received request for:');
             debug(parsedUrl);
             debug(req.url);
+            debug('Headers:');
             debug(req.headers);
+            debug('From source:');
+            debug(req.connection.remoteAddress);
             var matched = false;
-            _.each(settings.probeRequests, function(probeUrl) {
+            debug('ProbeRequests:');
+            debug(settings.probeRequests.concat(ipProbeRequests));
+
+            // If it matches one of our pre-set urls
+            _.each(settings.probeRequests.concat(ipProbeRequests), function(probeUrl) {
               var parsedProbe = url.parse(probeUrl);
-              debug('parsedProbe:');
-              debug(parsedProbe);
-              if (parsedUrl.pathname === parsedProbe.pathname) {
+              if (parsedUrl.pathname === parsedProbe.pathname && 
+                  parsedProbe.host === req.headers.host) {
                 debug(parsedUrl.pathname + ' matches ' + probeUrl);
+                matched = true;
+              } 
+            });
+
+            // Check to see if it matches one of our headers and if it does
+            // save the host+pathname combination 
+            _.each(settings.probeHeaders, function(regex, key) {
+              debug('ProbeHeader:');
+              debug('key = ' + key);
+              debug('regex = ' + regex);
+              if (typeof req.headers[key] === 'string' &&
+                  regex.test(req.headers[key])) {
+                debug(req.url + ' matches because header ' + req.headers[key] + ' matches.');
+                matched = true;
+                debug('saving pathname: ' + parsedUrl.host + '://' + parsedUrl.pathname + ' for ' + settings.cachePathnameTime + 'sec');
+
+                cachedPathNames.push({
+                  host: parsedUrl.host,
+                  pathname: parsedUrl.pathname
+                });
+
+                setTimeout(function() {
+                  cachedPathNames = _.without(cachedPathNames, _.findWhere(cachedPathNames, {
+                    host: parsedUrl.host,
+                    pathname: parsedUrl.pathname
+                  }));
+                }, settings.cachePathnameTime * 1000);
+              }
+            });
+
+            // Check to see if it matches one of the cached host/pathnames
+            _.each(cachedPathNames, function(pathObj) {
+              if (parsedUrl.host === pathObj.host && parsedUrl.pathname === pathObj.pathname) {
                 matched = true;
               }
             });
+
             if (matched) {
               proxy.web(req, res, {
                 target: 'http://' + listenIp + ':' + webPort
@@ -312,6 +356,8 @@ var run = function() {
             } else {
               debug('Proxying to target:');
               debug('http://' + req.headers.host + req.url);
+              debug('From source:');
+              debug(req.connection.remoteAddress);
 
               proxy.web(req, res, {
                 target: 'http://' + req.headers.host + req.url
@@ -329,8 +375,8 @@ var run = function() {
             debug(parsedUrl);
             debug(req.url);
             debug(req.headers);
-            res.writeHead(200, {'Content-Type': 'text/plain' });
-            res.write('request successfully proxied to: ' + req.url + '\n' + JSON.stringify(req.headers, true, 2));
+            res.writeHead(200, {'Content-Type': 'text/html' });
+            res.write('<html><head><title>splash page</title></head><body><p>request successfully proxied to: ' + req.url + '\n' + JSON.stringify(req.headers, true, 2) + '</p></body></html>');
             res.end();
           }).listen(webPort, '127.0.0.1', function() {
             debug('listening on 127.0.0.1:' + webPort);
