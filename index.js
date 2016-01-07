@@ -24,6 +24,8 @@ var inInterface = argv.inInterface || settings.inInterface;
 var ipProbeRequests = [];
 var cachedPathNames = [];
 
+var staticSplashHtml = fs.readFileSync('./www/splash.html');
+
 var debug = function(str) {
   if (argv.debug) {
     process.stdout.write('[DEBUG] ');
@@ -376,7 +378,7 @@ var run = function() {
             debug(req.url);
             debug(req.headers);
             res.writeHead(200, {'Content-Type': 'text/html' });
-            res.write('<html><head><title>splash page</title></head><body><p>request successfully proxied to: ' + req.url + '\n' + JSON.stringify(req.headers, true, 2) + '</p></body></html>');
+            res.write(staticSplashHtml);
             res.end();
           }).listen(webPort, '127.0.0.1', function() {
             debug('listening on 127.0.0.1:' + webPort);
