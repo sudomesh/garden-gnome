@@ -389,6 +389,24 @@ var run = function() {
   }, function(err) {
     console.error('Error: ' + err);
   });
+
+  process.on('SIGINT', function() {
+    cleanup().then(function() {
+      process.exit();
+    });
+  });
+
+  process.on('SIGHUP', function() {
+    cleanup().then(function() {
+      process.exit();
+    });
+  });
+
+  process.on('SIGTERM', function() {
+    cleanup().then(function() {
+      process.exit();
+    });
+  });
 };
 
 if (argv.help || argv.h) {
