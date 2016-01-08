@@ -390,23 +390,16 @@ var run = function() {
     console.error('Error: ' + err);
   });
 
-  process.on('SIGINT', function() {
+  var gracefulExit = function() {
     cleanup().then(function() {
       process.exit();
     });
-  });
+  };
 
-  process.on('SIGHUP', function() {
-    cleanup().then(function() {
-      process.exit();
-    });
-  });
+  process.on('SIGINT', gracefulExit);
+  process.on('SIGHUP', gracefulExit);
+  process.on('SIGTERM', gracefulExit);
 
-  process.on('SIGTERM', function() {
-    cleanup().then(function() {
-      process.exit();
-    });
-  });
 };
 
 if (argv.help || argv.h) {
