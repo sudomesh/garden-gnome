@@ -24,7 +24,7 @@ var inInterface = argv.inInterface || settings.inInterface;
 var ipProbeRequests = [];
 var cachedPathNames = [];
 
-var staticSplashHtml = fs.readFileSync('./www/splash.html');
+var staticSplashHtml = fs.readFileSync(__dirname + '/www/splash.html');
 
 var debug = function(str) {
   if (argv.debug) {
