@@ -57,8 +57,7 @@ Usage: ./index.js
 Options:
   --ip: Proxy listen IP address (default: 127.0.0.1)
   --port: Proxy listen port (default: 5080)
-  --portalTime: Amount of time before showing portal again (in min) (default: 1440).
-  --dnsLookupPeriod: Amount of time before refreshing dns cache. (in sec) (default: 300).
+  --dnsLookupPeriod: Amount of time before refreshing dns cache. (in sec) (default: 60).
   --inInterface: Interface to redirect from (default: all).
 ```
 

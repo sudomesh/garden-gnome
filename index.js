@@ -17,7 +17,6 @@ var settings = require('./settings.js');
 var listenIp = argv.ip || settings.listenIp;
 var proxyPort = argv.proxyPort || settings.proxyPort;
 var webPort = argv.webPort || settings.webPort;
-var portalTime = argv.portalTime || settings.portalTime;
 var dnsLookupPeriod = argv.dnsLookupPeriod || settings.dnsLookupPeriod;
 var inInterface = argv.inInterface || settings.inInterface;
 
@@ -40,7 +39,6 @@ var usage = function() {
   console.error('Options:');
   console.error('  --port <port>: port that the garden-gnome proxy will listen on');
   console.error('  --ip <ip>: ip that the port will listen on. Defaults to ' + settings.listenIp);
-  console.error('  --portalTime <time>: amount of time before the portal is shown again (in min). Defaults to ' + settings.portalTime);
   console.error('  --dnsLookupPeriod <time>: amount of time before refreshing the dns cache (in sec). Defaults to ' + settings.dnsLookupPeriod);
   console.error('');
   console.error('Defaults can be overwritten in the settings.js file.');

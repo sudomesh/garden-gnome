@@ -3,8 +3,7 @@ module.exports = {
 
   listenIp: '127.0.0.1',
   proxyPort: '5080',
-  portalTime: '1440', // in min
-  dnsLookupPeriod: '300', // in sec
+  dnsLookupPeriod: '60', // in sec
   webPort: '5081',
   cachePathnameTime: '300', // in sec
 
