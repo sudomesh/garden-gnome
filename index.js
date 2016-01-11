@@ -148,92 +148,140 @@ var refreshDnsmasq = function(callback) {
     flushIptablesRulePromise.then(function() {
 
       var configBuffer = '';
-      ipProbeRequests = [];
 
-      var addIptablesRulePromises = [];
+      var probeUrls = [];
+
+      var cnameResolutionPromises = [];
       _.each(settings.probeRequests, function(probeUrl) {
-        addIptablesRulePromises.push(function() {
+        var parsed = url.parse(probeUrl);
+        probeUrls.push(parsed);
+        cnameResolutionPromises.push(function() {
           return new Promise(function(resolve, reject) {
+            debug('resolving CNAME for ' + parsed.hostname);
             try {
+              dns.resolve(parsed.hostname, 'CNAME', function(err, cnames) {
+                debug('err:');
+                debug(err);
 
-              var parsed = url.parse(probeUrl);
-
-              debug('Resolving:');
-              debug(parsed.hostname);
-
-              dns.resolve(parsed.hostname, 'A', function(err, addresses) {
+                debug('cname resolution finished for: ');
+                debug(parsed.hostname);
+                debug('cnames:');
+                debug(cnames);
                 if (err) {
-                  reject('problem resolving ' + parsed.hostname + ' : ' + err);
-                } else if (addresses.length === 0) {
-                  reject('problem resolving ' + parsed.hostname + ' : no records returned');
-                }
-
-                var iptablesPromises = [];
-                _.each(addresses, function(address) {
-                  iptablesPromises.push(function() {
-                    return new Promise(function (resolve, reject) {
-                      configBuffer += 'host-record=' + parsed.hostname + ',' + address + '\n';
-                      ipProbeRequests.push('http://' + address + parsed.pathname);
-                      iptables.append({
-                        table: 'nat',
-                        chain: settings.iptablesChain,
-
-                        protocol: 'tcp',
-                        destination: address,
-                        'destination-port': 80,
-
-                        'in-interface': inInterface || undefined,
-
-                        jump: 'REDIRECT',
-                        target_options: {
-                          'to-ports': proxyPort
-                        }
-                      }, function (err) {
-                        if (err) {
-                          reject(err);
-                        } else {
-                          resolve();
-                        }
-                      });
-                    });
-                  }());
-                });
-                Promise.all(iptablesPromises).then(function() {
-                  debug('iptables rules appended');
+                  console.error('problem resolving CNAME from ' + parsed.hostname + ' : ' + err);
                   resolve();
-                }, function (err) {
-                  reject(err);
-                });
+                } else {
+                  _.each(cnames, function(cname) {
+                    probeUrls.push(url.parse(parsed.protocol + '//' + cname + parsed.path));
+                  });
+
+                  debug('resolving...');
+
+                  resolve();
+                }
               });
             } catch (e) {
+              console.error('caught error:');
+              console.error(e);
               reject(e);
             }
           });
         }());
       });
 
-      Promise.all(addIptablesRulePromises).then(function() {
-        debug('dnsmasq config buffer:');
-        debug(configBuffer);
+      Promise.all(cnameResolutionPromises).then(function() {
+        debug('probeUrls:');
+        debug(probeUrls);
 
-        fs.write(fd, configBuffer, function(err, written, string) {
-          if (err) {
-            callback('problem writing to dnsmasq config file: ' + err);
-            return;
-          } else {
-            exec('service dnsmasq restart').on('exit', function(code, signal) {
-              if (code !== 0) {
-                console.error('failure restarting dnsmasq');
-                callback('Dependency check failed');
-                return;
-              } else {
-                callback();
+        ipProbeRequests = [];
+        var addIptablesRulePromises = [];
+        _.each(probeUrls, function(probeUrl) {
+          addIptablesRulePromises.push(function() {
+            return new Promise(function(resolve, reject) {
+              try {
+
+                var parsed = url.parse(probeUrl);
+
+                debug('Resolving:');
+                debug(parsed.hostname);
+
+                dns.resolve(parsed.hostname, 'A', function(err, addresses) {
+                  if (err) {
+                    reject('problem resolving ' + parsed.hostname + ' : ' + err);
+                  } else if (addresses.length === 0) {
+                    reject('problem resolving ' + parsed.hostname + ' : no records returned');
+                  }
+
+                  var iptablesPromises = [];
+                  _.each(addresses, function(address) {
+                    iptablesPromises.push(function() {
+                      return new Promise(function (resolve, reject) {
+                        configBuffer += 'host-record=' + parsed.hostname + ',' + address + '\n';
+                        ipProbeRequests.push('http://' + address + parsed.pathname);
+                        iptables.append({
+                          table: 'nat',
+                          chain: settings.iptablesChain,
+
+                          protocol: 'tcp',
+                          destination: address,
+                          'destination-port': 80,
+
+                          'in-interface': inInterface || undefined,
+
+                          jump: 'REDIRECT',
+                          target_options: {
+                            'to-ports': proxyPort
+                          }
+                        }, function (err) {
+                          if (err) {
+                            reject(err);
+                          } else {
+                            resolve();
+                          }
+                        });
+                      });
+                    }());
+                  });
+                  Promise.all(iptablesPromises).then(function() {
+                    debug('iptables rules appended');
+                    resolve();
+                  }, function (err) {
+                    reject(err);
+                  });
+                });
+              } catch (e) {
+                reject(e);
               }
             });
-          }
+          }());
+        });
+
+        Promise.all(addIptablesRulePromises).then(function() {
+          debug('dnsmasq config buffer:');
+          debug(configBuffer);
+
+          fs.write(fd, configBuffer, function(err, written, string) {
+            if (err) {
+              callback('problem writing to dnsmasq config file: ' + err);
+              return;
+            } else {
+              exec('service dnsmasq restart').on('exit', function(code, signal) {
+                if (code !== 0) {
+                  console.error('failure restarting dnsmasq');
+                  callback('Dependency check failed');
+                  return;
+                } else {
+                  callback();
+                }
+              });
+            }
+          });
+        }, function (err) {
+          callback(err);
         });
       }, function (err) {
-        callback(err);
+        console.log(err);
+        callback();
       });
     }, function (err) {
       callback(err);
