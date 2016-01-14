@@ -38,7 +38,8 @@ module.exports = {
   dnsmasqConfFile: '/etc/dnsmasq.d/garden-gnome.conf',
 
   probeHeaders: {
-    'user-agent': /CaptiveNetworkSupport*/
+    'user-agent': /CaptiveNetworkSupport*/,
+    'user-agent': /Android-Wifi*/
   },
 
   probeRequests: [
@@ -52,11 +53,8 @@ module.exports = {
     'http://www.airport.us/library/test/success.html',
     'http://www.thinkdifferent.us/library/test/success.html',
     'http://www.appleiphonecell.com/library/test/success.html',
-    'http://clients1.google.com/generate_204',
-    'http://clients2.google.com/generate_204',
     'http://clients3.google.com/generate_204',
     'http://connectivitycheck.android.com/generate_204',
-    'http://googleads.g.doubleclick.net/gen_204',
     'http://www.msftncsi.com/ncsi.txt'
   ]
 };
