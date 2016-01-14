@@ -110,7 +110,11 @@ var cleanup = function(callback) {
           } else {
             debug(settings.iptablesChain + ' chain deleted');
           }
-          fs.truncateSync(settings.dnsmasqConfFile);
+          try {
+            fs.removeSync(settings.dnsmasqConfFile);
+          } catch (e) {
+            debug('Error removing dnsmasqConfFile - perhaps it doesn\'t already exist? Error: ' + e);
+          }
           resolve();
         });
       });
