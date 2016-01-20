@@ -181,10 +181,39 @@
         If you like the network, please consider contributing here: <a href="https://gratipay.com/sudomesh/">https://gratipay.com/sudomesh/</a>
       </div>
       <div id="button-container">
-        <a href="http://peoplesopen.net"><div class="right pure-button">Go to the Internet</div></a>
+        <a id="go-to-internet-button" href="#"><div class="right pure-button">Go to the Internet</div></a>
       </div>
 
     </div><!-- END CONTENT CONTAINER -->
   </div><!-- END CONTAINER -->
+
+  <script type="text/javascript">
+    var domReady = function(callback) {
+      document.readyState === "interactive" || document.readyState === "complete" ? callback() : document.addEventListener("DOMContentLoaded", callback);
+    };
+
+    domReady(function() {
+      var internetButton = document.getElementById('go-to-internet-button');
+      internetButton.addEventListener('click', function() {
+        var request = new XMLHttpRequest();
+        request.open('GET', window.location.pathname, true);
+
+        request.setRequestHeader('x-peoplesopen-portal-click', true);
+
+        request.onreadystatechange = function() {
+          console.log(request);
+          if (request.readyState != 4 || request.status != 200) {
+            console.log('Error in POST request');
+            console.log(request);
+          } else {
+            window.location.href = 'http://peoplesopen.net';
+          }
+        };
+
+        request.send();
+      });
+    });
+  </script>
   </body>
 </html>
+

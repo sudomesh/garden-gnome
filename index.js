@@ -3,27 +3,29 @@
 var argv = require('yargs').argv;
 var exec = require('child_process').exec;
 var fs = require('fs-extra');
-var http = require('http');
-var httpProxy = require('http-proxy');
 var _ = require('lodash');
 var iptables = require('netfilter').iptables;
 var ps = require('ps-node');
 var url = require('url');
 var dns = require('dns');
 var Promise = require('promise');
+var moment = require('moment');
 
 var settings = require('./settings.js');
+
+var proxy = require('./proxy.js');
 
 var listenIp = argv.ip || settings.listenIp;
 var proxyPort = argv.proxyPort || settings.proxyPort;
 var webPort = argv.webPort || settings.webPort;
 var dnsLookupPeriod = argv.dnsLookupPeriod || settings.dnsLookupPeriod;
 var inInterface = argv.inInterface || settings.inInterface;
+var checkClearedPeriod = argv.checkClearedPeriod || settings.checkClearedPeriod;
 
-var ipProbeRequests = [];
-var cachedPathNames = [];
+var clearedChain = settings.iptablesChain + '1';
+var proxyChain = settings.iptablesChain + '2';
 
-var staticSplashHtml = fs.readFileSync(__dirname + '/www/splash.html');
+var clearedIps = [];
 
 var debug = function(str) {
   if (argv.debug) {
@@ -86,36 +88,71 @@ var cleanup = function(callback) {
       'destination-port': 80,
       'in-interface': settings.inInterface || undefined,
 
-      jump: settings.iptablesChain
-    }, function (err) {
+      jump: clearedChain
 
+    }, function (err) {
       if (err) {
         debug(err);
-        debug(settings.iptablesChain + ' PREROUTING rule already deleted?');
+        debug(clearedChain + ' rule already deleted?');
       } else {
-        debug(settings.iptablesChain + ' PREROUTING rule deleted');
+        debug(clearedChain + ' rule deleted');
       }
 
-      iptables.flush({
+
+      iptables.delete({
         table: 'nat',
-        chain: settings.iptablesChain
+        chain: clearedChain,
+
+        jump: proxyChain
+
       }, function (err) {
-        iptables.deleteChain({
+
+        if (err) {
+          debug(err);
+          debug(proxyChain + ' rule already deleted?');
+        } else {
+          debug(proxyChain + ' rule deleted');
+        }
+
+        iptables.flush({
           table: 'nat',
-          chain: settings.iptablesChain,
+          chain: proxyChain
         }, function (err) {
-          if (err) {
-            debug(err);
-            debug(settings.iptablesChain + ' chain already deleted?');
-          } else {
-            debug(settings.iptablesChain + ' chain deleted');
-          }
-          try {
-            fs.removeSync(settings.dnsmasqConfFile);
-          } catch (e) {
-            debug('Error removing dnsmasqConfFile - perhaps it doesn\'t already exist? Error: ' + e);
-          }
-          resolve();
+          iptables.deleteChain({
+            table: 'nat',
+            chain: proxyChain,
+          }, function (err) {
+            if (err) {
+              debug(err);
+              debug(proxyChain + ' chain already deleted?');
+            } else {
+              debug(proxyChain + ' chain deleted');
+            }
+
+            iptables.flush({
+              table: 'nat',
+              chain: clearedChain
+            }, function (err) {
+              iptables.deleteChain({
+                table: 'nat',
+                chain: clearedChain,
+              }, function (err) {
+                if (err) {
+                  debug(err);
+                  debug(clearedChain + ' chain already deleted?');
+                } else {
+                  debug(clearedChain + ' chain deleted');
+                }
+
+                try {
+                  fs.removeSync(settings.dnsmasqConfFile);
+                } catch (e) {
+                  debug('Error removing dnsmasqConfFile - perhaps it doesn\'t already exist? Error: ' + e);
+                }
+                resolve();
+              });
+            });
+          });
         });
       });
     });
@@ -134,7 +171,7 @@ var refreshDnsmasq = function(callback) {
       try {
         iptables.flush({
           table: 'nat',
-          chain: settings.iptablesChain,
+          chain: proxyChain,
 
         }, function (err) {
           if (err) {
@@ -194,9 +231,6 @@ var refreshDnsmasq = function(callback) {
       });
 
       Promise.all(cnameResolutionPromises).then(function() {
-        debug('probeUrls:');
-        debug(probeUrls);
-
         ipProbeRequests = [];
         var addIptablesRulePromises = [];
         _.each(probeUrls, function(probeUrl) {
@@ -224,7 +258,7 @@ var refreshDnsmasq = function(callback) {
                         ipProbeRequests.push('http://' + address + parsed.pathname);
                         iptables.append({
                           table: 'nat',
-                          chain: settings.iptablesChain,
+                          chain: proxyChain,
 
                           protocol: 'tcp',
                           destination: address,
@@ -246,6 +280,7 @@ var refreshDnsmasq = function(callback) {
                       });
                     }());
                   });
+
                   Promise.all(iptablesPromises).then(function() {
                     debug('iptables rules appended');
                     resolve();
@@ -293,145 +328,143 @@ var refreshDnsmasq = function(callback) {
   });
 };
 
+var addClearedIp = function(srcIp) {
+  iptables.insert({
+    table: 'nat',
+    chain: clearedChain,
+
+    source: srcIp,
+
+    jump: 'RETURN',
+  }, function (err) {
+    if (err) {
+      console.error(err);
+    } else {
+      debug('Added ' + srcIp + ' to ' + clearedChain);
+      clearedIps.push({
+        srcIp: srcIp,
+        time: moment().unix()
+      });
+    }
+  });
+};
+
+var cleanupClearedIps = function(callback) {
+  var matchedIp = function(match) {
+    return match.time + settings.clearedTime < moment().unix();
+  }
+
+  _.each(clearedIps, function(match) {
+    if (matchedIp(match)) {
+      iptables.delete({
+        table: 'nat',
+        chain: clearedChain,
+
+        source: match.srcIp,
+
+        jump: 'RETURN'
+
+      }, function (err) {
+        if (err) {
+          console.error(err);
+          console.error('Can\'t delete iptables rule in ' + clearedChain + ' from srcIp = ' + match.srcIp);
+          callback(err);
+        } else {
+          debug('Deleted iptables rule in ' + clearedChain + ' from srcIp = ' + match.srcIp);
+        }
+      });
+    }
+  });
+
+  _.remove(clearedIps, matchedIp);
+  callback();
+};
+
 var run = function() {
+  proxy.init({
+    listenIp: listenIp,
+    proxyPort: proxyPort,
+    webPort: webPort,
+    proxyChain: proxyChain,
+  }, addClearedIp, debug);
 
   cleanup().then(function() {
     checkDependencies(function(err) {
       if (err) {
         console.error('Error: ' + err);
-        process.exit();
+        gracefulExit();
       }
 
       iptables.new({
         table: 'nat',
-        chain: settings.iptablesChain,
+        chain: clearedChain,
       }, function (err) {
         if (err) {
           console.error('Error: ' + err);
-          process.exit();
+          gracefulExit();
         }
 
-        iptables.append({
+        iptables.new({
           table: 'nat',
-          chain: 'PREROUTING',
-
-          protocol: 'tcp',
-          source: settings.sourceNet,
-          'destination-port': 80,
-
-          'in-interface': settings.inInterface || undefined,
-
-          jump: settings.iptablesChain
+          chain: proxyChain,
         }, function (err) {
           if (err) {
             console.error('Error: ' + err);
+            gracefulExit();
           }
 
-          refreshDnsmasq(function(err) {
+          iptables.append({
+            table: 'nat',
+            chain: 'PREROUTING',
+
+            protocol: 'tcp',
+            source: settings.sourceNet,
+            'destination-port': 80,
+
+            'in-interface': settings.inInterface || undefined,
+
+            jump: clearedChain
+          }, function (err) {
             if (err) {
               console.error('Error: ' + err);
-              process.exit();
+              gracefulExit();
             }
-          });
 
-          // Refresh dnsmasq file every dnslookupPeriod * 1000 ms
-          setInterval(refreshDnsmasq, dnsLookupPeriod * 1000, function(err) {
-            if (err) {
-              console.error('Error: ' + err);
-            }
-          });
+            iptables.append({
+              table: 'nat',
+              chain: clearedChain,
 
-          var proxy = httpProxy.createProxyServer({});
-
-          debug('proxyPort: ' + proxyPort);
-          var server = http.createServer(function(req, res) {
-
-            var parsedUrl = url.parse(req.url);
-            debug('Received request for:');
-            debug(parsedUrl);
-            debug(req.url);
-            debug('Headers:');
-            debug(req.headers);
-            debug('From source:');
-            debug(req.connection.remoteAddress);
-            var matched = false;
-            debug('ProbeRequests:');
-            debug(settings.probeRequests.concat(ipProbeRequests));
-
-            // If it matches one of our pre-set urls
-            _.each(settings.probeRequests.concat(ipProbeRequests), function(probeUrl) {
-              var parsedProbe = url.parse(probeUrl);
-              if (parsedUrl.pathname === parsedProbe.pathname && 
-                  parsedProbe.host === req.headers.host) {
-                debug(parsedUrl.pathname + ' matches ' + probeUrl);
-                matched = true;
-              } 
-            });
-
-            // Check to see if it matches one of our headers and if it does
-            // save the host+pathname combination 
-            _.each(settings.probeHeaders, function(regex, key) {
-              debug('ProbeHeader:');
-              debug('key = ' + key);
-              debug('regex = ' + regex);
-              if (typeof req.headers[key] === 'string' &&
-                  regex.test(req.headers[key])) {
-                debug(req.url + ' matches because header ' + req.headers[key] + ' matches.');
-                matched = true;
-                debug('saving pathname: ' + parsedUrl.host + '://' + parsedUrl.pathname + ' for ' + settings.cachePathnameTime + 'sec');
-
-                cachedPathNames.push({
-                  host: parsedUrl.host,
-                  pathname: parsedUrl.pathname
-                });
-
-                setTimeout(function() {
-                  cachedPathNames = _.without(cachedPathNames, _.findWhere(cachedPathNames, {
-                    host: parsedUrl.host,
-                    pathname: parsedUrl.pathname
-                  }));
-                }, settings.cachePathnameTime * 1000);
+              jump: proxyChain
+            }, function (err) {
+              if (err) {
+                console.error('Error: ' + err);
+                gracefulExit();
               }
-            });
 
-            // Check to see if it matches one of the cached host/pathnames
-            _.each(cachedPathNames, function(pathObj) {
-              if (parsedUrl.host === pathObj.host && parsedUrl.pathname === pathObj.pathname) {
-                matched = true;
-              }
-            });
-
-            if (matched) {
-              proxy.web(req, res, {
-                target: 'http://' + listenIp + ':' + webPort
+              refreshDnsmasq(function(err) {
+                if (err) {
+                  console.error('Error: ' + err);
+                  gracefulExit();
+                }
               });
-            } else {
-              debug('Proxying to target:');
-              debug('http://' + req.headers.host + req.url);
-              debug('From source:');
-              debug(req.connection.remoteAddress);
 
-              proxy.web(req, res, {
-                target: 'http://' + req.headers.host + req.url
+              proxy.start();
+
+              // Refresh dnsmasq file every dnslookupPeriod * 1000 ms
+              setInterval(refreshDnsmasq, dnsLookupPeriod * 1000, function(err) {
+                if (err) {
+                  console.error('Error: ' + err);
+                }
               });
-            }
-          }).listen(proxyPort, function() {
-            debug('listening on port ' + proxyPort);
-          });
 
-          debug('webPort: ' + webPort);
+              // Check for cleared ips every checkClearedPeriod seconds
+              setInterval(cleanupClearedIps, checkClearedPeriod, function(err) {
+                if (err) {
+                  console.error('Error: ' + err);
+                }
+              });
 
-          http.createServer(function (req, res) {
-            var parsedUrl = url.parse(req.url);
-            debug('Received request for:');
-            debug(parsedUrl);
-            debug(req.url);
-            debug(req.headers);
-            res.writeHead(200, {'Content-Type': 'text/html' });
-            res.write(staticSplashHtml);
-            res.end();
-          }).listen(webPort, '127.0.0.1', function() {
-            debug('listening on 127.0.0.1:' + webPort);
+            });
           });
         });
       });

@@ -20,9 +20,11 @@
     "fs-extra": "^0.26.3",
     "http-proxy": "^1.12.0",
     "lodash": "^3.10.1",
+    "moment": "^2.11.1",
     "netfilter": "max-b/node-netfilter",
     "promise": "^7.1.1",
     "ps-node": "0.0.5",
+    "request-ip": "^1.1.4",
     "yargs": "^3.31.0"
   },
   "license": "GPL-3.0",

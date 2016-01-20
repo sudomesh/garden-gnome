@@ -1,11 +1,23 @@
 
 module.exports = {
 
-  listenIp: '127.0.0.1',
+
+  // Port that proxy is listening on
   proxyPort: '5080',
-  dnsLookupPeriod: '60', // in sec
+
+  // Ip that web server is listening on
+  listenIp: '127.0.0.1',
+  // Port that web server is listening on
   webPort: '5081',
-  cachePathnameTime: '300', // in sec
+
+  // How often to refresh dns
+  dnsLookupPeriod: 60 * 15, // in sec
+
+  cachePathnameTime: 300, // in sec
+
+  // Amount of time to clear captive portal redirects
+  // after user clicks
+  clearedTime: 60 * 60 * 24, // in sec = 1 day
 
   sourceNet: '100.64.0.0/10',
 
@@ -37,10 +49,24 @@ module.exports = {
 
   dnsmasqConfFile: '/etc/dnsmasq.d/garden-gnome.conf',
 
-  probeHeaders: {
-    'user-agent': /CaptiveNetworkSupport*/,
-    'user-agent': /Android-Wifi*/
-  },
+  // Sending a GET request with matching headers will 
+  // add the src ip to a cleared list
+  clearIpHeaders: [
+    {
+      'x-peoplesopen-portal-click': true
+    }
+  ],
+
+  checkClearedPeriod: 60,
+
+  probeHeaders: [
+    {
+      'user-agent': /CaptiveNetworkSupport*/,
+    },
+    {
+      'user-agent': /Android-Wifi*/
+    }
+  ],
 
   probeRequests: [
     'http://apple.com/library/test/success.html',
