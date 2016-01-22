@@ -53,7 +53,7 @@ module.exports = {
   // add the src ip to a cleared list
   clearIpHeaders: [
     {
-      'x-peoplesopen-portal-click': true
+      'x-peoplesopen-portal-click': 'true'
     }
   ],
 
