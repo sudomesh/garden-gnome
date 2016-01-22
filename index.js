@@ -457,8 +457,8 @@ var run = function() {
                 }
               });
 
-              // Check for cleared ips every checkClearedPeriod seconds
-              setInterval(cleanupClearedIps, checkClearedPeriod, function(err) {
+              // Check for cleared ips every checkClearedPeriod * 1000ms
+              setInterval(cleanupClearedIps, checkClearedPeriod * 1000, function(err) {
                 if (err) {
                   console.error('Error: ' + err);
                 }
