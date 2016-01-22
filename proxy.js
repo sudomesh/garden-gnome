@@ -28,6 +28,18 @@ module.exports = {
 
     var proxy = httpProxy.createProxyServer({});
 
+    proxy.on('error', function (err, req, res) {
+      res.writeHead(500, {
+        'Content-Type': 'text/plain'
+      });
+
+      res.end('Error proxying PeoplesOpen.net captive portal probe.');
+      console.error('Error proxying PeoplesOpen.net captive portal probe.');
+      console.error(err);
+      console.error(req);
+      console.error(res);
+    });
+
     debug('proxyPort: ' + configs.proxyPort);
     var server = http.createServer(function(req, res) {
 
